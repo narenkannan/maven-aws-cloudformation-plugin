@@ -24,7 +24,7 @@ import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 
-@Mojo(name = "create-stack")
+@Mojo(name = "create")
 public class CreateStackMojo extends AbstractMojo {
 
     @Parameter(alias = "StackName", property = "project.artifactId")
