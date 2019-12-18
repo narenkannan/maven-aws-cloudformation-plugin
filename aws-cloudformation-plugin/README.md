@@ -57,7 +57,7 @@ mvn cft:create-stack
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
+Please read [CONTRIBUTING.md](https://gist.github.com/narenkannan/4f58e604f3f3d0e9caa4980e9fa849b6) for details on our code of conduct, and the process for submitting pull requests to us.
 
 ## Versioning
 
