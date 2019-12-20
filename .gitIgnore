@@ -2,3 +2,4 @@ target
 .classpath
 .project
 .settings
+ec2-cloudformation-template/.vscode/settings.json
