@@ -27,7 +27,8 @@
         <artifactId>cft-maven-plugin</artifactId>
         <version>1.0-SNAPSHOT</version>
         <configuration>
-          <TemplateDirectory>templates</TemplateDirectory>
+          <template>templates/EC2InstanceWithSecurityGroupSample.template</template>
+          <updateIfExists>true</updateIfExists>
           <Parameters>
             <KeyName>naren</KeyName>
             <InstanceType>t2.micro</InstanceType>

@@ -22,11 +22,11 @@ public class DescribeStackMojo extends AbstractCloudFormationMojo<DescribeStackM
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-        describeStackResources();
+        waitForCompleteAndDescribe();
     }
 
     @Override
-    public Waiter<DescribeStacksRequest> defineMojoCompleteAction(AmazonCloudFormationWaiters waiters) {
+    public Waiter<DescribeStacksRequest> defineStackCompleteAction(AmazonCloudFormationWaiters waiters) {
         return waiters.stackExists();
     }
 

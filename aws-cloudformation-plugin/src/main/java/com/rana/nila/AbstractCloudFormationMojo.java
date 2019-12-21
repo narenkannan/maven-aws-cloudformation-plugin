@@ -26,15 +26,16 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Parameter;
 
-public abstract class AbstractCloudFormationMojo<T extends AbstractMojo> extends AbstractMojo {
+public abstract class AbstractCloudFormationMojo<T extends AbstractMojo> extends AbstractMojo
+        implements CloudFormationMojo {
 
-    @Parameter(alias = "StackName", property = "project.artifactId")
+    @Parameter(alias = "stackName", property = "project.artifactId")
     String stackName;
 
-    @Parameter(alias = "ClientRequestToken")
-    int clientRequestToken = new Random().nextInt();
+    @Parameter(alias = "clientRequestToken")
+    String clientRequestToken;// = Integer.toString(new Random().nextInt());
 
-    @Parameter(alias = "EnableTerminationProtection", defaultValue = "false")
+    @Parameter(alias = "enableTerminationProtection", defaultValue = "false")
     boolean enableTerminationProtection;
 
     @Parameter(alias = "OnFailure", defaultValue = "ROLLBACK")
@@ -52,55 +53,103 @@ public abstract class AbstractCloudFormationMojo<T extends AbstractMojo> extends
     @Parameter(alias = "Parameters")
     Map<String, String> parameters;
 
-    @Parameter(alias = "TemplateDirectory", defaultValue = "templates")
-    File templateDirectory;
+    @Parameter(alias = "template", defaultValue = "cloudformation.template")
+    File template;
 
     @Parameter(alias = "delayBeforeNextRetry")
     int delayBeforeNextRetry = 5000;
 
-    Log log = getLog();
+    @Parameter(alias = "updateIfExists", defaultValue = "false")
+    boolean updateIfExists;
 
-    public void setStackName(String stackName) {
-        this.stackName = stackName;
-    }
+    Log log = getLog();
 
     public AmazonCloudFormation amazonCloudFormation;
 
-    public AbstractCloudFormationMojo() {
-        this.amazonCloudFormation = AmazonCloudFormationClientBuilder.defaultClient();
-    };
-
-    public AbstractCloudFormationMojo(AmazonCloudFormation amazonCloudFormation){
-        this.amazonCloudFormation = amazonCloudFormation;
-    };
-
-    public T withStackName(String stackName) {
-        this.stackName = stackName;
-        return (T)this;
+    @Override
+    public String getStackName() {
+        return this.stackName;
     }
 
-    public abstract Waiter<DescribeStacksRequest> defineMojoCompleteAction(AmazonCloudFormationWaiters waiters);
+    public String getClientRequestToken() {
+        return clientRequestToken;
+    }
 
+    public AmazonCloudFormation getAmazonCloudFormation() {
+        return amazonCloudFormation;
+    }
 
-    public void describeStackResources( ) throws MojoExecutionException, MojoFailureException {
-        WaiterParameters<DescribeStacksRequest> waiterParameters = WaiterParametersBuilder
-                        .getWaiterParameters(stackName);
-        defineMojoCompleteAction(amazonCloudFormation.waiters()).run(waiterParameters);
-        DescribeStackResourcesRequest describeStackResourcesRequest = new DescribeStackResourcesRequest();
+    @Override
+    public boolean getEnableTerminationProtection() {
+        return enableTerminationProtection;
+    }
+
+    @Override
+    public OnFailure onFailure() {
+        return onFailure;
+    }
+
+    @Override
+    public String getRoleARN() {
+        return roleARN;
+    }
+
+    @Override
+    public Integer getTimeoutInMinutes() {
+        return timeoutInMinutes;
+    }
+
+    @Override
+    public List<String> getCapabilities() {
+        return capabilities;
+    }
+
+    @Override
+    public Map<String, String> getParameters() {
+        return parameters;
+    }
+
+    @Override
+    public File getTemplate() {
+        return template;
+    }
+
+    @Override
+    public int getDelayBeforeNextRetry() {
+        return delayBeforeNextRetry;
+    }
+
+    @Override
+    public boolean isUpdateIfExists() {
+        return updateIfExists;
+    }
+
+    public abstract Waiter<DescribeStacksRequest> defineStackCompleteAction(AmazonCloudFormationWaiters waiters);
+
+    public void waitForCompleteAndDescribe() throws MojoExecutionException, MojoFailureException {
+        final WaiterParameters<DescribeStacksRequest> waiterParameters = WaiterParametersBuilder
+                .getWaiterParameters(stackName);
+        defineStackCompleteAction(amazonCloudFormation.waiters()).run(waiterParameters);
+        describeStack();
+    }
+
+    private void describeStack() {
+        final DescribeStackResourcesRequest describeStackResourcesRequest = new DescribeStackResourcesRequest();
         describeStackResourcesRequest.withStackName(stackName);
-        DescribeStackResourcesResult result = amazonCloudFormation.describeStackResources(describeStackResourcesRequest);
-        List<StackResource> stackResources = result.getStackResources();
+        final DescribeStackResourcesResult result = amazonCloudFormation
+                .describeStackResources(describeStackResourcesRequest);
+        final List<StackResource> stackResources = result.getStackResources();
         stackResources.stream().forEach(stackResource -> {
             log.info(String.format("%50s%50s%25s%50s", stackResource.getLogicalResourceId(),
                     stackResource.getResourceType(), stackResource.getResourceStatus(),
-                    stackResource.getTimestamp().toGMTString()));
+                    stackResource.getTimestamp()));
         });
     }
 
-    protected List<com.amazonaws.services.cloudformation.model.Parameter> getParameters() {
-        List<com.amazonaws.services.cloudformation.model.Parameter> parametersList = new ArrayList<com.amazonaws.services.cloudformation.model.Parameter>();
+    protected List<com.amazonaws.services.cloudformation.model.Parameter> getParameterList() {
+        final List<com.amazonaws.services.cloudformation.model.Parameter> parametersList = new ArrayList<com.amazonaws.services.cloudformation.model.Parameter>();
         parameters.forEach((k, v) -> {
-            com.amazonaws.services.cloudformation.model.Parameter param = new com.amazonaws.services.cloudformation.model.Parameter();
+            final com.amazonaws.services.cloudformation.model.Parameter param = new com.amazonaws.services.cloudformation.model.Parameter();
             param.setParameterKey(k);
             param.setParameterValue(v);
             parametersList.add(param);
@@ -110,26 +159,48 @@ public abstract class AbstractCloudFormationMojo<T extends AbstractMojo> extends
 
     protected PollingStrategy.RetryStrategy retryStrategy = new PollingStrategy.RetryStrategy() {
         @Override
-        public boolean shouldRetry(PollingStrategyContext pollingStrategyContext) {
+        public boolean shouldRetry(final PollingStrategyContext pollingStrategyContext) {
             log.info("retries attempted: " + pollingStrategyContext.getRetriesAttempted());
             return true;
         }
     };
 
-    protected PollingStrategy.DelayStrategy delayStrategy = new PollingStrategy.DelayStrategy(){
+    protected PollingStrategy.DelayStrategy delayStrategy = new PollingStrategy.DelayStrategy() {
         @Override
-        public void delayBeforeNextRetry(PollingStrategyContext pollingStrategyContext)
+        public void delayBeforeNextRetry(final PollingStrategyContext pollingStrategyContext)
                 throws InterruptedException {
-                    pollingStrategyContext.wait(delayBeforeNextRetry);
+            pollingStrategyContext.wait(delayBeforeNextRetry);
         }
     };
 
     protected File[] getCloudFormationTemplateFiles() {
-        File[] templates = templateDirectory.listFiles(new FilenameFilter() {
+        final File[] templates = template.listFiles(new FilenameFilter() {
             public boolean accept(final File dir, final String name) {
                 return name.toLowerCase().endsWith(".template");
             }
         });
         return templates;
     }
+
+    public AbstractCloudFormationMojo() {
+        if (clientRequestToken == null)
+            clientRequestToken = Integer.toString(new Random().nextInt());
+        this.amazonCloudFormation = AmazonCloudFormationClientBuilder.defaultClient();
+    };
+
+    public AbstractCloudFormationMojo(final CloudFormationMojo cloudFormationMojo) {
+        this.amazonCloudFormation = cloudFormationMojo.getAmazonCloudFormation();
+        this.clientRequestToken = cloudFormationMojo.getClientRequestToken();
+        this.capabilities = cloudFormationMojo.getCapabilities();
+        this.delayBeforeNextRetry = cloudFormationMojo.getDelayBeforeNextRetry();
+        this.enableTerminationProtection = cloudFormationMojo.getEnableTerminationProtection();
+        this.onFailure = cloudFormationMojo.onFailure();
+        this.parameters = cloudFormationMojo.getParameters();
+        this.roleARN = cloudFormationMojo.getRoleARN();
+        this.stackName = cloudFormationMojo.getStackName();
+        this.template = cloudFormationMojo.getTemplate();
+        this.timeoutInMinutes = cloudFormationMojo.getTimeoutInMinutes();
+        this.updateIfExists = cloudFormationMojo.isUpdateIfExists();
+    };
+
 }
